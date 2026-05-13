@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Abyss
+GenericName=Hallownest Platformer
+Comment=A 2D action-platformer through Hallownest
+Exec=@HOME@/.local/bin/abyss
+Icon=@HOME@/.local/share/abyss/icon.png
+Terminal=false
+Categories=Game;ActionGame;ArcadeGame;
+Keywords=platformer;action;metroidvania;
+StartupWMClass=Abyss - Hallownest
