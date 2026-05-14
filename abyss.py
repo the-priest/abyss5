@@ -22,6 +22,11 @@ Keyboard:
   Tab ...................... map
   Esc ...................... quit
 
+Music (drop your own tracks into ~/Music/abyss/  —  .mp3 .ogg .wav .flac):
+  V ........................ mute / unmute
+  N ........................ skip to next track
+  -  /  = .................. volume down / up
+
 Gamepad (8BitDo / Xbox layout):
   Left stick / D-pad ....... move
   A (btn 0) ................ jump / hold for glide
@@ -40,6 +45,14 @@ import pygame, sys, math, random, os, json, hashlib
 from pathlib import Path
 
 pygame.init()
+# Audio: try to init mixer with metal-friendly settings. Safe if it fails.
+try:
+    pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=1024)
+    pygame.mixer.init()
+    _AUDIO_OK = True
+except Exception:
+    _AUDIO_OK = False
+
 WIDTH, HEIGHT = 1280, 720
 if os.environ.get('ABYSS_WINDOW') == '1':
     SCREEN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED)
@@ -423,6 +436,177 @@ class Lights:
 
 
 # ===========================================================================
+# Music — plays whatever audio files live in any of these folders:
+#   ~/Music/abyss/
+#   ~/.local/share/abyss/music/
+#   ./music/              (next to abyss.py)
+# Drop your own Metallica / Slipknot / Tool / Tenacious D tracks in there.
+# Supported: .mp3 .ogg .wav .flac
+# Controls: M = mute, [ = vol down, ] = vol up, N = next track
+# ===========================================================================
+class Music:
+    EXTS = ('.mp3', '.ogg', '.wav', '.flac')
+
+    def __init__(self):
+        self.enabled = _AUDIO_OK
+        self.tracks = []
+        self.idx = -1
+        self.muted = False
+        self.volume = 0.55
+        self.now_playing = ""
+        self.now_playing_t = 0
+        self.next_check = 0
+        if not self.enabled:
+            return
+        self._scan()
+        if self.tracks:
+            try:
+                pygame.mixer.music.set_volume(self.volume)
+            except Exception:
+                self.enabled = False
+                return
+            self._play_next()
+        # also ensure the music folder exists with a README so user
+        # knows where to put files
+        self._write_readme()
+
+    def _candidate_dirs(self):
+        home = Path.home()
+        here = Path(__file__).parent if '__file__' in globals() else Path('.')
+        return [
+            home / "Music" / "abyss",
+            home / ".local" / "share" / "abyss" / "music",
+            here / "music",
+        ]
+
+    def _scan(self):
+        seen = set()
+        out = []
+        for d in self._candidate_dirs():
+            try:
+                if d.is_dir():
+                    for p in sorted(d.iterdir()):
+                        if p.suffix.lower() in self.EXTS and p.name not in seen:
+                            out.append(p)
+                            seen.add(p.name)
+            except Exception:
+                continue
+        random.shuffle(out)
+        self.tracks = out
+
+    def _write_readme(self):
+        try:
+            target = Path.home() / "Music" / "abyss"
+            target.mkdir(parents=True, exist_ok=True)
+            readme = target / "README.txt"
+            if not readme.exists():
+                readme.write_text(
+                    "Drop .mp3 / .ogg / .wav / .flac files in this folder.\n"
+                    "ABYSS will play them shuffled while you play.\n"
+                    "\n"
+                    "In-game controls:\n"
+                    "  M  = mute / unmute\n"
+                    "  N  = skip to next track\n"
+                    "  [  = volume down\n"
+                    "  ]  = volume up\n"
+                )
+        except Exception:
+            pass
+
+    def _play_next(self):
+        if not self.tracks:
+            return
+        self.idx = (self.idx + 1) % len(self.tracks)
+        track = self.tracks[self.idx]
+        try:
+            pygame.mixer.music.load(str(track))
+            pygame.mixer.music.play()
+            self.now_playing = track.stem
+            self.now_playing_t = 240   # frames to show on-screen
+        except Exception:
+            # bad file — skip and try the next one
+            self.tracks.pop(self.idx)
+            self.idx -= 1
+            if self.tracks:
+                self._play_next()
+
+    def tick(self):
+        """Call once per frame."""
+        if not self.enabled or not self.tracks:
+            return
+        if self.now_playing_t > 0:
+            self.now_playing_t -= 1
+        # check ~once per second whether track ended
+        self.next_check += 1
+        if self.next_check >= 30:
+            self.next_check = 0
+            try:
+                if not pygame.mixer.music.get_busy() and not self.muted:
+                    self._play_next()
+            except Exception:
+                pass
+
+    def toggle_mute(self):
+        if not self.enabled: return
+        self.muted = not self.muted
+        try:
+            if self.muted:
+                pygame.mixer.music.pause()
+            else:
+                if pygame.mixer.music.get_busy():
+                    pygame.mixer.music.unpause()
+                else:
+                    self._play_next()
+        except Exception:
+            pass
+        self.now_playing = "MUTED" if self.muted else self.tracks[self.idx].stem if self.tracks else ""
+        self.now_playing_t = 90
+
+    def skip(self):
+        if not self.enabled or not self.tracks: return
+        try: pygame.mixer.music.stop()
+        except Exception: pass
+        self._play_next()
+
+    def vol_up(self):
+        if not self.enabled: return
+        self.volume = min(1.0, self.volume + 0.1)
+        try: pygame.mixer.music.set_volume(self.volume)
+        except Exception: pass
+        self.now_playing = f"vol {int(self.volume * 100)}%"
+        self.now_playing_t = 60
+
+    def vol_down(self):
+        if not self.enabled: return
+        self.volume = max(0.0, self.volume - 0.1)
+        try: pygame.mixer.music.set_volume(self.volume)
+        except Exception: pass
+        self.now_playing = f"vol {int(self.volume * 100)}%"
+        self.now_playing_t = 60
+
+    def draw_overlay(self, surf):
+        if self.now_playing_t <= 0 or not self.now_playing:
+            return
+        # fade in over 15 frames, hold, fade out over 30 frames
+        if self.now_playing_t > 210:
+            a = int(255 * (240 - self.now_playing_t) / 30)
+        elif self.now_playing_t < 30:
+            a = int(255 * self.now_playing_t / 30)
+        else:
+            a = 255
+        text = "♪ " + self.now_playing if not self.muted else "♪ muted"
+        s = SMALL.render(text, True, (220, 220, 230))
+        s.set_alpha(a)
+        bg = pygame.Surface((s.get_width() + 16, s.get_height() + 8),
+                            pygame.SRCALPHA)
+        bg.fill((0, 0, 0, int(a * 0.55)))
+        x = WIDTH - bg.get_width() - 16
+        y = HEIGHT - bg.get_height() - 16
+        surf.blit(bg, (x, y))
+        surf.blit(s, (x + 8, y + 4))
+
+
+# ===========================================================================
 # Gamepad
 # ===========================================================================
 PAD_JUMP = (0,); PAD_DASH = (1,); PAD_NAIL = (2,)
@@ -585,10 +769,7 @@ def draw_knight(surf, x, y, facing=1, walk_t=0, in_air=False,
     pygame.draw.polygon(surf, mask_c, horn_r)
     pygame.draw.polygon(surf, mask_shade, horn_r, 1)
 
-    # ambient halo light (callers should also call lights.add)
-    if light is not None:
-        lights, lc = light
-        lights.add(cx, cy - 8, 70, lc, intensity=0.5)
+    # (player ambient halo removed — no more blue ball)
 
 
 def draw_dash_afterimage(surf, x, y, facing, alpha):
@@ -2274,9 +2455,7 @@ class Player:
             facing=self.facing, walk_t=self.walk_t,
             in_air=not self.on_ground, dashing=self.dash_t > 0,
             gliding=self.gliding, hit_flash=self.hit_flash > 0)
-        # halo light around player — barely-there ambient lift
-        lights.add(int(self.x - camx), int(self.y - 18 - camy),
-                   22, pal['light'], intensity=0.10)
+        # (player halo light removed — no more blue circle)
 
 
 class Level:
@@ -2766,6 +2945,7 @@ def draw_map(surf, t, state, current_area, current_sub):
 def main():
     state = load_save()
     pad = Pad()
+    music = Music()
     area_id = state.get('last_area', 'dirtmouth')
     if area_id not in [a['id'] for a in AREAS] or area_id not in state['unlocked']:
         area_id = 'dirtmouth'
@@ -2858,6 +3038,14 @@ def main():
                     elif ev.key == pygame.K_j and player.alive:
                         keys = pygame.key.get_pressed()
                         player.attack(keys, pad, particles, cam)
+                    elif ev.key == pygame.K_v:
+                        music.toggle_mute()
+                    elif ev.key == pygame.K_n:
+                        music.skip()
+                    elif ev.key == pygame.K_MINUS:
+                        music.vol_down()
+                    elif ev.key == pygame.K_EQUALS:
+                        music.vol_up()
                     elif ev.key == pygame.K_PAGEUP:
                         if sub_idx + 1 < SUBLEVELS_PER_AREA:
                             goto(area_id, sub_idx + 1)
@@ -3212,6 +3400,10 @@ def main():
             draw_shop(SCREEN, t, state, shop_cursor, shop_msg, shop_msg_t)
         elif mode == 'map':
             draw_map(SCREEN, t, state, area_id, sub_idx)
+
+        # music: advance state + draw "now playing" toast
+        music.tick()
+        music.draw_overlay(SCREEN)
 
         pygame.display.flip()
         CLOCK.tick(FPS)
