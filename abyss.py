@@ -2815,12 +2815,22 @@ def main():
                 pad.on_removed(ev.instance_id)
             elif ev.type == pygame.KEYDOWN:
                 if ev.key == pygame.K_ESCAPE:
-                    if mode != 'play':
+                    if mode == 'shop':
+                        # apply purchased upgrades on exit
+                        mode = 'play'
+                        save_state(state)
+                        reload_current()
+                    elif mode != 'play':
                         mode = 'play'
                     else:
                         running = False
                 elif ev.key == pygame.K_TAB:
-                    mode = 'map' if mode != 'map' else 'play'
+                    if mode == 'shop':
+                        # exit shop properly before showing map
+                        save_state(state); reload_current()
+                        mode = 'map'
+                    else:
+                        mode = 'map' if mode != 'map' else 'play'
                 elif ev.key == pygame.K_r and mode == 'play':
                     state['mites'] += player.mites if player.alive else 0
                     save_state(state)
@@ -2872,22 +2882,33 @@ def main():
                         ok, msg = try_buy(state, shop_cursor)
                         shop_msg = msg; shop_msg_t = 90
                         if ok: save_state(state)
-                    elif ev.key == pygame.K_e:
+                    elif ev.key in (pygame.K_e, pygame.K_q, pygame.K_m,
+                                    pygame.K_BACKSPACE):
                         mode = 'play'; save_state(state)
                         # re-apply upgrades by reloading player
                         reload_current()
                 elif mode == 'map':
-                    if ev.key == pygame.K_PAGEUP:
+                    # any of these close the map — covers phone keyboards
+                    # without a working Tab or Esc
+                    if ev.key in (pygame.K_m, pygame.K_RETURN,
+                                  pygame.K_BACKSPACE, pygame.K_q,
+                                  pygame.K_e):
+                        mode = 'play'
+                    elif ev.key in (pygame.K_PAGEUP, pygame.K_d,
+                                    pygame.K_RIGHT):
                         if sub_idx + 1 < SUBLEVELS_PER_AREA:
                             goto(area_id, sub_idx + 1)
-                    elif ev.key == pygame.K_PAGEDOWN:
+                    elif ev.key in (pygame.K_PAGEDOWN, pygame.K_a,
+                                    pygame.K_LEFT):
                         if sub_idx > 0:
                             goto(area_id, sub_idx - 1)
-                    elif ev.key == pygame.K_LEFTBRACKET:
+                    elif ev.key in (pygame.K_LEFTBRACKET, pygame.K_w,
+                                    pygame.K_UP):
                         unl = [a['id'] for a in AREAS if a['id'] in state['unlocked']]
                         i = unl.index(area_id) if area_id in unl else 0
                         if i > 0: goto(unl[i-1], 0)
-                    elif ev.key == pygame.K_RIGHTBRACKET:
+                    elif ev.key in (pygame.K_RIGHTBRACKET, pygame.K_s,
+                                    pygame.K_DOWN):
                         unl = [a['id'] for a in AREAS if a['id'] in state['unlocked']]
                         i = unl.index(area_id) if area_id in unl else 0
                         if i + 1 < len(unl): goto(unl[i+1], 0)
@@ -2928,12 +2949,42 @@ def main():
                     ok, msg = try_buy(state, shop_cursor)
                     shop_msg = msg; shop_msg_t = 90
                     if ok: save_state(state)
-                elif ev.button in PAD_NAIL:
+                elif ev.button in PAD_NAIL or ev.button in PAD_DASH \
+                        or ev.button in PAD_MAP:
                     mode = 'play'; save_state(state); reload_current()
                 elif ev.button in PAD_NEXT:
                     shop_cursor = (shop_cursor + 1) % len(UPGRADES)
                 elif ev.button in PAD_PREV:
                     shop_cursor = (shop_cursor - 1) % len(UPGRADES)
+            elif ev.type == pygame.JOYBUTTONDOWN and mode == 'map':
+                # any face button or Map/Back closes the map
+                if (ev.button in PAD_JUMP or ev.button in PAD_DASH
+                        or ev.button in PAD_NAIL or ev.button in PAD_MAP):
+                    mode = 'play'
+                elif ev.button in PAD_NEXT:
+                    if sub_idx + 1 < SUBLEVELS_PER_AREA:
+                        goto(area_id, sub_idx + 1)
+                elif ev.button in PAD_PREV:
+                    if sub_idx > 0:
+                        goto(area_id, sub_idx - 1)
+                elif ev.button in PAD_QUIT:
+                    running = False
+            elif ev.type == pygame.JOYHATMOTION and mode == 'map':
+                hx, hy = ev.value
+                if hx > 0:
+                    if sub_idx + 1 < SUBLEVELS_PER_AREA:
+                        goto(area_id, sub_idx + 1)
+                elif hx < 0:
+                    if sub_idx > 0:
+                        goto(area_id, sub_idx - 1)
+                elif hy > 0:
+                    unl = [a['id'] for a in AREAS if a['id'] in state['unlocked']]
+                    i = unl.index(area_id) if area_id in unl else 0
+                    if i > 0: goto(unl[i-1], 0)
+                elif hy < 0:
+                    unl = [a['id'] for a in AREAS if a['id'] in state['unlocked']]
+                    i = unl.index(area_id) if area_id in unl else 0
+                    if i + 1 < len(unl): goto(unl[i+1], 0)
 
         keys = pygame.key.get_pressed()
         jump_held = (keys[pygame.K_SPACE] or keys[pygame.K_w]

@@ -15,7 +15,7 @@ A 2D action-platformer through Hallownest, inspired by *Hollow Knight*. Single-f
 ## Install
 
 ```
-git clone https://github.com/the-priest/abyss.git
+git clone https://github.com/the-priest/abyss5.git
 cd abyss
 pip install -r requirements.txt
 python3 abyss.py
@@ -44,7 +44,7 @@ This places `abyss` in `~/.local/bin/`, the icon in `~/.local/share/abyss/`, and
 | Pogo slash | `Down` + `J` (in air) — bounces off enemies and hazards |
 | Talk / Trade | `E` or `Up` near shopkeeper |
 | Restart sublevel | `R` |
-| Map | `Tab` |
+| Map | `Tab` (close with `Tab`, `Esc`, `M`, `Enter`, `Backspace`, `Q`, or `E`) |
 | Quit | `Esc` |
 
 ### Gamepad (Xbox / 8BitDo layout)
@@ -55,7 +55,7 @@ This places `abyss` in `~/.local/bin/`, the icon in `~/.local/share/abyss/`, and
 | Dash | B (btn 1) |
 | Nail | X (btn 2) |
 | Next / previous sublevel | RB / LB |
-| Map | Back (btn 6) |
+| Map | Back (btn 6) — press any face button to close |
 | Quit | Start (btn 7) |
 
 ## How to play
