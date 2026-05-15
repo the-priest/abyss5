@@ -47,7 +47,7 @@ from pathlib import Path
 pygame.init()
 # Audio: try to init mixer with metal-friendly settings. Safe if it fails.
 try:
-    pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=1024)
+    pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=2048)
     pygame.mixer.init()
     _AUDIO_OK = True
 except Exception:
@@ -446,11 +446,14 @@ class Lights:
 # ===========================================================================
 class Music:
     EXTS = ('.mp3', '.ogg', '.wav', '.flac')
+    # pygame user event id for "the current track just finished"
+    END_EVENT = pygame.USEREVENT + 7
 
     def __init__(self):
         self.enabled = _AUDIO_OK
         self.tracks = []
         self.idx = -1
+        self.next_idx = -1       # index of the queued-up next track
         self.muted = False
         self.volume = 0.55
         self.now_playing = ""
@@ -462,6 +465,7 @@ class Music:
         if self.tracks:
             try:
                 pygame.mixer.music.set_volume(self.volume)
+                pygame.mixer.music.set_endevent(Music.END_EVENT)
             except Exception:
                 self.enabled = False
                 return
@@ -513,32 +517,74 @@ class Music:
         except Exception:
             pass
 
+    def _queue_next_track(self):
+        """Queue the next track so pygame plays it seamlessly after the
+        current one ends. Sets self.next_idx so we know what's coming."""
+        if not self.tracks:
+            return
+        self.next_idx = (self.idx + 1) % len(self.tracks)
+        track = self.tracks[self.next_idx]
+        try:
+            pygame.mixer.music.queue(str(track))
+        except Exception:
+            # bad file — drop it and try the one after
+            try:
+                self.tracks.pop(self.next_idx)
+            except Exception:
+                pass
+            self.next_idx = -1
+
     def _play_next(self):
+        """Start playing the next track (or first track) immediately."""
         if not self.tracks:
             return
         self.idx = (self.idx + 1) % len(self.tracks)
         track = self.tracks[self.idx]
         try:
             pygame.mixer.music.load(str(track))
+            pygame.mixer.music.set_volume(self.volume)  # re-apply each load
             pygame.mixer.music.play()
             self.now_playing = track.stem
-            self.now_playing_t = 240   # frames to show on-screen
+            self.now_playing_t = 240
+            self.next_idx = -1
+            # Pre-queue the one that comes after so transitions are gapless.
+            self._queue_next_track()
         except Exception:
-            # bad file — skip and try the next one
+            # bad file — skip
             self.tracks.pop(self.idx)
             self.idx -= 1
             if self.tracks:
                 self._play_next()
 
+    def handle_event(self, event):
+        """Pump end-event from main loop so we can re-queue instantly."""
+        if not self.enabled or not self.tracks:
+            return
+        if event.type == Music.END_EVENT:
+            # The track that just ended was either the active one (the
+            # queued track is now playing automatically) or we hit an
+            # end without a queue. Either way, slide the idx forward
+            # and queue another.
+            if self.next_idx >= 0:
+                self.idx = self.next_idx
+                self.next_idx = -1
+                self.now_playing = self.tracks[self.idx].stem
+                self.now_playing_t = 240
+                self._queue_next_track()
+            else:
+                # nothing was queued — just play the next one cold
+                self._play_next()
+
     def tick(self):
-        """Call once per frame."""
+        """Call once per frame. Fallback if endevent didn't fire (rare)."""
         if not self.enabled or not self.tracks:
             return
         if self.now_playing_t > 0:
             self.now_playing_t -= 1
-        # check ~once per second whether track ended
+        # safety net: if we're not muted and pygame says music isn't busy,
+        # restart playback. Check less often to avoid spamming.
         self.next_check += 1
-        if self.next_check >= 30:
+        if self.next_check >= 120:  # ~2 sec
             self.next_check = 0
             try:
                 if not pygame.mixer.music.get_busy() and not self.muted:
@@ -2987,6 +3033,8 @@ def main():
 
     while running:
         for ev in pygame.event.get():
+            # Music: catch the track-ended event from pygame's mixer.
+            music.handle_event(ev)
             if ev.type == pygame.QUIT:
                 running = False
             elif ev.type == pygame.JOYDEVICEADDED:
