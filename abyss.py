@@ -44,14 +44,30 @@ Windowed mode:  ABYSS_WINDOW=1 abyss   (default = fullscreen)
 import pygame, sys, math, random, os, json, hashlib
 from pathlib import Path
 
-pygame.init()
-# Audio: try to init mixer with metal-friendly settings. Safe if it fails.
+# Audio: pre_init MUST come before pygame.init(), otherwise pygame initializes
+# the mixer with default settings and ignores our buffer/freq choices.
+# Lower freq (22050) + larger buffer (4096) is the canonical stutter-free
+# combo on weak ARM hardware (phones, Pi, SBCs).
 try:
-    pygame.mixer.pre_init(frequency=44100, size=-16, channels=2, buffer=2048)
-    pygame.mixer.init()
+    pygame.mixer.pre_init(frequency=22050, size=-16, channels=2, buffer=4096)
     _AUDIO_OK = True
 except Exception:
     _AUDIO_OK = False
+
+pygame.init()
+
+# Re-confirm the mixer initialized correctly; if pygame.init didn't do it
+# (some builds), explicitly init now.
+if _AUDIO_OK:
+    try:
+        if not pygame.mixer.get_init():
+            pygame.mixer.init()
+        # log what we actually got — helps debug stutter
+        _ai = pygame.mixer.get_init()
+        if _ai:
+            print(f"[audio] {_ai[0]}Hz, {abs(_ai[1])}-bit, {_ai[2]}ch")
+    except Exception:
+        _AUDIO_OK = False
 
 WIDTH, HEIGHT = 1280, 720
 if os.environ.get('ABYSS_WINDOW') == '1':
