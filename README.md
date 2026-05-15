@@ -1,62 +1,47 @@
 # ABYSS
 
-A Hollow Knight–flavored 2D action-platformer in a single Python file.
-Pygame. No external assets — every sprite, particle, and tile is drawn
-procedurally at runtime.
+A 2D atmospheric platformer with a Hollow Knight–flavored vibe, single-file
+Python. 14 areas × 99 procedurally generated sublevels each, 5 bosses, nail
+combat, glide, dash, shop, gamepad support, public-domain music.
 
 ```
-14 hand-crafted area intros · 99 procedurally generated sublevels per area
-5 telegraphed boss fights · nail combat · double-jump · dash · glide
-parallax · particle lights · gamepad support · doom-classical soundtrack
+14 areas · 99 sublevels per area · 5 bosses · single-file Python
+nail combat · pogo · dash · glide · charged attack
+procedural sublevels with consistent area aesthetics
+seamless music playback (Doom-classical public domain)
+gamepad support · save/load · shop
 ```
 
 ---
 
-## One-command install
-
-After editing `install.sh` and replacing `REPLACE-ME` with your GitHub
-username, anyone (including you, on a fresh machine) can install with:
+## One-command install (any Linux, macOS, or Termux)
 
 ```sh
 curl -sL https://raw.githubusercontent.com/the-priest/abyss5/main/install.sh | sh
 ```
 
-This clones the repo to `~/abyss5`, installs `pygame`, and downloads ~5
-public-domain doom-classical tracks into `~/Music/abyss/`.
+The installer:
 
-Then:
+- detects your OS and package manager (apt, dnf, pacman, zypper, apk,
+  xbps, emerge, brew, pkg on Termux)
+- installs whatever's missing: `git`, `python3`, `pip`, `pygame`
+- clones the repo to `~/abyss5`
+- creates an `abyss` command on your PATH
+- creates an app-launcher entry with icon (Linux desktops)
+- fetches public-domain music to `~/Music/abyss/`
+
+Tap the icon, or run:
 
 ```sh
-cd ~/abyss5 && python3 abyss.py
+abyss
 ```
 
----
+## Update
 
-## Manual install
-
-```sh
-git clone https://github.com/the-priest/abyss5.git ~/abyss5
-cd ~/abyss5
-pip install pygame --break-system-packages
-python3 fetch_music.py
-python3 abyss.py
-```
-
----
-
-## Update an existing install
-
-From inside the clone (both PC and phone):
+Just re-run the installer:
 
 ```sh
-./update.sh
-```
-
-That's just:
-
-```sh
-git pull --ff-only
-python3 fetch_music.py
+curl -sL https://raw.githubusercontent.com/the-priest/abyss5/main/install.sh | sh
 ```
 
 ---
@@ -67,66 +52,38 @@ python3 fetch_music.py
 
 ```
 A / D / arrows         move
-Space / W / Up         jump (hold = higher; x2 = double jump;
-                       hold after double jump = glide)
-Left Shift             dash
-J                      nail attack
-Up + J                 upward slash
-Down + J (in air)      pogo slash (bounce off enemies / hazards)
-E / Up near shopkeeper open shop
-R                      restart sublevel
-Tab                    map
+Space / W / Up         jump (hold for glide; double-tap for dash)
+J / Z / Left-Mouse     nail attack
+K                      heal (uses focus)
+Tab                    world map
+R                      restart current sublevel
 Esc                    quit
+M                      mute / unmute music
+N                      skip to next track
+[ / ]                  volume down / up
 ```
 
-### Music controls (any time)
-
-```
-V    mute / unmute
-N    next track
--    volume down
-=    volume up
-```
-
-### Gamepad (8BitDo / Xbox layout, auto-detected)
+### Gamepad
 
 ```
 Left stick / D-pad     move
-A (btn 0)              jump / hold for glide
-B (btn 1)              dash
-X (btn 2)              nail attack
-RB / LB                next / previous sublevel
-Back (btn 6)           map
-Start (btn 7)          quit
+A                      jump (hold to glide)
+B                      dash
+X                      nail attack
+Y                      heal
+Start                  map
+Back                   quit
 ```
-
-To disable the gamepad: `ABYSS_NO_PAD=1 python3 abyss.py`
-To run windowed instead of fullscreen: `ABYSS_WINDOW=1 python3 abyss.py`
 
 ---
 
-## Soundtrack
+## Music
 
-`fetch_music.py` downloads ~80 MB of public-domain orchestral tracks into
-`~/Music/abyss/`:
+The installer downloads ~5 public-domain orchestral pieces to
+`~/Music/abyss/`. You can drop your own `.mp3` / `.ogg` / `.wav` / `.flac`
+files there and they'll play shuffled in-game.
 
-- Bach — Toccata and Fugue in D Minor (pipe organ)
-- Bach — Toccata and Fugue (US Marine Band brass)
-- Wagner — Ride of the Valkyries (American Symphony Orchestra, 1921)
-- Wagner — Ride of the Valkyries (NPS Edison Diamond Disc, 1921)
-- Mussorgsky — Night on Bald Mountain
-
-ABYSS also scans these folders, in order:
-
-```
-~/Music/abyss/
-~/.local/share/abyss/music/
-./music/    (next to abyss.py)
-```
-
-Drop your own `.mp3`, `.ogg`, `.wav`, or `.flac` files in any of them. They
-join the shuffle. **Don't commit copyrighted audio to the repo** — the
-`.gitignore` already excludes audio files for that reason.
+In-game music controls: `M` mute, `N` skip, `[` / `]` volume.
 
 ---
 
@@ -134,12 +91,10 @@ join the shuffle. **Don't commit copyrighted audio to the repo** — the
 
 `~/.local/share/abyss/save.json`
 
-To reset: `rm -f ~/.local/share/abyss/save.json`
+Reset: `rm ~/.local/share/abyss/save.json`
 
 ---
 
 ## License
 
-MIT (code). Music files are public-domain recordings; ABYSS does not bundle
-or distribute them in this repo — `fetch_music.py` downloads them from the
-Internet Archive and Project Gutenberg on first run.
+MIT.
